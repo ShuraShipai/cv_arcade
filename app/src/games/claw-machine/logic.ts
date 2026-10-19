@@ -67,6 +67,22 @@ export function voiceThreshold(sensitivity: number): number {
   return Math.max(0.4, Math.min(0.92, 0.88 - (sensitivity - 0.5) * 0.24));
 }
 
+/**
+ * Geometry of the hanging claw, shared by the renderer and its tests. The trolley the claw
+ * hangs from sits at y = 0 and positions its own parts in world space, so the claw head's
+ * offset is simply its world height — subtracting RAIL_Y here buries it under the pit floor.
+ */
+export function clawRig(y: number) {
+  const cableLength = Math.max(0.1, RAIL_Y - y);
+  return {
+    cableLength,
+    /** Mid-point of the cable, so a unit cylinder can be scaled into place. */
+    cableCenterY: RAIL_Y - cableLength / 2,
+    /** Local offset of the claw head inside the trolley. */
+    headY: y,
+  };
+}
+
 export interface ClawState {
   phase: Phase;
   phaseT: number;

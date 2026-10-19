@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { GameContext, GameInstance } from '../../play/types';
 import {
   CHUTE, FLOOR_Y, RAIL_Y, START_CREDITS, VOICE_WORDS,
-  buildPrizes, createClawState, startGrab, step, voiceThreshold,
+  buildPrizes, clawRig, createClawState, startGrab, step, voiceThreshold,
   type Action, type ClawState, type Input, type Prize,
 } from './logic';
 import './claw.css';
@@ -27,6 +27,13 @@ async function detectBrave(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * The pretrained 18-word model, served from this app rather than Google's CDN. Brave Shields
+ * (and plenty of corporate proxies) block storage.googleapis.com, which left the game with no
+ * voice at all. Vendoring the ~5.6 MB of weights also makes the game work offline.
+ */
+const MODEL_BASE = '/models/speech-commands/18w';
 
 /**
  * Loads the pretrained 18-word browser speech-commands model (TensorFlow.js). It ships the
@@ -50,7 +57,10 @@ async function loadVoiceModel(preferCpu: boolean) {
     }
   }
   await ready();
-  const recognizer = speechCommands.create('BROWSER_FFT', '18w');
+  // vocabulary must be null when custom URLs are supplied.
+  const recognizer = speechCommands.create(
+    'BROWSER_FFT', null as unknown as string, `${MODEL_BASE}/model.json`, `${MODEL_BASE}/metadata.json`,
+  );
   await recognizer.ensureModelLoaded();
   return { recognizer, backend: getBackend() };
 }
@@ -341,9 +351,7 @@ export function create(ctx: GameContext): GameInstance {
     } catch (error) {
       recognizer = null;
       const detail = error instanceof Error ? error.message : 'DOWNLOAD FAILED';
-      setVoice(isBrave
-        ? 'MODEL BLOCKED · LOWER BRAVE SHIELDS FOR THIS SITE · USE KEYS'
-        : `MODEL FAILED · ${detail.slice(0, 36).toUpperCase()} · USE KEYS`);
+      setVoice(`MODEL FAILED · ${detail.slice(0, 36).toUpperCase()} · USE KEYS`);
       voiceBtn.textContent = 'RETRY COMMAND MODEL';
     } finally {
       voiceBusy = false;
@@ -491,10 +499,10 @@ export function create(ctx: GameContext): GameInstance {
     /* ---- transforms ---- */
     trolley.position.x = state.x;
     railZ.position.z = state.z;
-    clawHead.position.y = state.y - RAIL_Y;
-    const cableLen = Math.max(0.1, RAIL_Y - state.y);
-    cable.scale.y = cableLen;
-    cable.position.set(0, RAIL_Y - cableLen / 2, 0);
+    const rig = clawRig(state.y);
+    clawHead.position.y = rig.headY;
+    cable.scale.y = rig.cableLength;
+    cable.position.set(0, rig.cableCenterY, 0);
     for (const finger of fingers) finger.rotation.x = -0.62 * state.fingerOpen + 0.18;
     for (const p of state.prizes) {
       const mesh = prizeMeshes.get(p.id);

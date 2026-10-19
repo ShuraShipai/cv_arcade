@@ -1,6 +1,6 @@
 // npm test: head-less checks for the arcade cabinet and the Claw Machine rules.
 // Runs on tsx with no test framework, so it works without extra dependencies.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GAMES } from '../app/src/games';
@@ -12,8 +12,8 @@ import {
 } from '../app/src/games/apex-drive/physics';
 import {
   BOUNDS, CHUTE, FLOOR_Y, GRAB_RADIUS, HOLD_FRACTION, MOVE_SPEED, ROUND_SECONDS,
-  START_CREDITS, TRAVEL_Y, VOICE_WORDS, buildPrizes, createClawState, resolveGrab, startGrab,
-  step, voiceThreshold,
+  RAIL_Y, START_CREDITS, TRAVEL_Y, VOICE_WORDS, buildPrizes, createClawState, resolveGrab, startGrab,
+  clawRig, step, voiceThreshold,
   type ClawState, type Input, type Prize,
 } from '../app/src/games/claw-machine/logic';
 
@@ -505,6 +505,83 @@ check('a collected prize cannot be grabbed again', () => {
   s.z = target.z;
   const again = resolveGrab(s);
   assert(again?.id !== target.id, 'a collected prize must not be grabbable again');
+});
+
+console.log('\nClaw Machine · rig geometry');
+
+check('the claw head hangs at its own world height, not an offset', () => {
+  // Regression: the head was placed at y - RAIL_Y while its parent sat at y = 0, which
+  // buried the claw under the pit floor and left the cable dangling empty.
+  for (const y of [TRAVEL_Y, FLOOR_Y + 0.72, RAIL_Y, 2.5]) {
+    near(clawRig(y).headY, y, 1e-9, `the head should sit at y=${y}`);
+  }
+});
+
+check('the claw head is always inside the cabinet', () => {
+  const s = createClawState(fixedPit());
+  s.x = s.prizes[2].x;
+  s.z = s.prizes[2].z;
+  startGrab(s);
+  const dt = 1 / 60;
+  for (let i = 0; i < 2400 && s.phase !== 'move'; i++) {
+    step(s, dt, {});
+    const { headY } = clawRig(s.y);
+    assert(headY > FLOOR_Y - 0.5, `the claw head sank below the pit floor to ${headY}`);
+    assert(headY <= RAIL_Y + 1e-9, `the claw head rose above the rail to ${headY}`);
+  }
+});
+
+check('the cable always spans the rail down to the claw head', () => {
+  for (const y of [TRAVEL_Y, FLOOR_Y + 0.72, 3.0, RAIL_Y]) {
+    const { cableLength, cableCenterY, headY } = clawRig(y);
+    const top = cableCenterY + cableLength / 2;
+    const bottom = cableCenterY - cableLength / 2;
+    near(top, RAIL_Y, 1e-9, 'the cable should start at the rail');
+    assert(bottom <= headY + 1e-9, `the cable should reach the head (bottom ${bottom}, head ${headY})`);
+    assert(cableLength > 0, 'the cable should never collapse to nothing');
+  }
+});
+
+check('lowering lengthens the cable, lifting shortens it', () => {
+  assert(clawRig(FLOOR_Y + 0.72).cableLength > clawRig(TRAVEL_Y).cableLength,
+    'a lowered claw should hang on more cable than a raised one');
+});
+
+console.log('\nClaw Machine · bundled model');
+
+check('the pretrained model is served by this app, not a third-party CDN', () => {
+  const source = readFileSync(join(root, 'app/src/games/claw-machine/index.ts'), 'utf8');
+  // Strip comments: the CDN is named in a note explaining why we stopped using it.
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert(!code.includes('storage.googleapis.com'), 'the game should not fetch the model from a CDN');
+  assert(code.includes('/models/speech-commands/18w'), 'the game should load the vendored model');
+});
+
+check('every file the model manifest needs is present and complete', () => {
+  const dir = join(root, 'app/public/models/speech-commands/18w');
+  const manifest = JSON.parse(readFileSync(join(dir, 'model.json'), 'utf8'));
+  const bytes = { float32: 4, int32: 4, uint8: 1, bool: 1, float16: 2 } as Record<string, number>;
+  let declared = 0;
+  for (const group of manifest.weightsManifest) {
+    for (const weight of group.weights) {
+      declared += weight.shape.reduce((a: number, b: number) => a * b, 1) * bytes[weight.dtype];
+    }
+    for (const path of group.paths) {
+      assert(existsSync(join(dir, path)), `weight shard ${path} is missing`);
+    }
+  }
+  const onDisk = manifest.weightsManifest
+    .flatMap((g: { paths: string[] }) => g.paths)
+    .reduce((sum: number, p: string) => sum + statSync(join(dir, p)).size, 0);
+  assert(declared === onDisk, `weights are truncated: manifest wants ${declared} bytes, found ${onDisk}`);
+});
+
+check('the bundled metadata carries the five words we act on', () => {
+  const dir = join(root, 'app/public/models/speech-commands/18w');
+  const words: string[] = JSON.parse(readFileSync(join(dir, 'metadata.json'), 'utf8')).words;
+  for (const word of Object.keys(VOICE_WORDS)) {
+    assert(words.includes(word), `the bundled model cannot recognise "${word}"`);
+  }
 });
 
 console.log('\nClaw Machine · voice mapping');
