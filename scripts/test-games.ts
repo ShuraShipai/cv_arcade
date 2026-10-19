@@ -1,6 +1,6 @@
 // npm test: head-less checks for the arcade cabinet and the Claw Machine rules.
 // Runs on tsx with no test framework, so it works without extra dependencies.
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GAMES } from '../app/src/games';
@@ -505,6 +505,40 @@ check('a collected prize cannot be grabbed again', () => {
   s.z = target.z;
   const again = resolveGrab(s);
   assert(again?.id !== target.id, 'a collected prize must not be grabbable again');
+});
+
+console.log('\nBundle health');
+
+check('the browser bundle never reaches for Node\'s process', () => {
+  // Regression: speech-commands imports `util`, and the npm polyfill reads
+  // process.env.NODE_DEBUG as it initialises, throwing "process is not defined" and taking
+  // the voice model down with it.
+  const dist = join(root, 'dist/assets');
+  if (!existsSync(dist)) {
+    console.log('       (skipped: run npm run build first)');
+    return;
+  }
+  const offenders: string[] = [];
+  for (const file of readdirSync(dist).filter((f) => f.endsWith('.js'))) {
+    const code = readFileSync(join(dist, file), 'utf8');
+    if (/process\.env/.test(code) || /NODE_DEBUG/.test(code)) offenders.push(file);
+  }
+  assert(offenders.length === 0, `chunks reference Node globals: ${offenders.join(', ')}`);
+});
+
+check('util resolves to the local shim, not the npm polyfill', () => {
+  const config = readFileSync(join(root, 'vite.config.ts'), 'utf8');
+  assert(/find:\s*\/\^util\$\//.test(config), 'vite should alias the bare `util` import');
+  assert(config.includes('node-util-shim'), 'the alias should point at the local shim');
+  const shim = join(root, 'app/src/lib/node-util-shim.ts');
+  assert(existsSync(shim), 'the shim file should exist');
+  assert(readFileSync(shim, 'utf8').includes('export function promisify'),
+    'the shim must provide the one export speech-commands imports');
+});
+
+check('the util polyfill is not a dependency any more', () => {
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert(!pkg.dependencies?.util, 'the `util` polyfill should no longer be installed');
 });
 
 console.log('\nClaw Machine · rig geometry');

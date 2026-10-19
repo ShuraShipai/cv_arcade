@@ -15,8 +15,7 @@
     "@tensorflow-models/speech-commands": "0.5.4",
     "@tensorflow/tfjs": "3.21.0",
     "pdfjs-dist": "4.10.38",
-    "three": "0.169.0",
-    "util": "0.12.5"
+    "three": "0.169.0"
   },
   "devDependencies": {
     "@types/three": "0.169.0",

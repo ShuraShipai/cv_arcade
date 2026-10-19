@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 
@@ -11,9 +12,10 @@ export default defineConfig(({ mode }) => {
     root: 'app',
     envDir: repoRoot,
     resolve: {
-      // TensorFlow speech-commands uses Node's `util.promisify` only for file:// URLs.
-      // Resolve that import to the browser polyfill; model files use HTTPS in this app.
-      alias: [{ find: /^util$/, replacement: 'util/' }],
+      // TensorFlow speech-commands imports Node's `util.promisify` for a file:// branch we
+      // never take. The npm `util` polyfill reads `process.env` as it loads and throws
+      // "process is not defined" in the browser, so point the import at a local shim.
+      alias: [{ find: /^util$/, replacement: resolve(repoRoot, 'app/src/lib/node-util-shim.ts') }],
     },
     build: {
       outDir: '../dist',
