@@ -285,8 +285,8 @@ export function create(ctx: GameContext): GameInstance {
     g.restore(); g.restore(); g.restore();
 
     // HUD
-    g.textAlign = 'center'; g.fillStyle = THEME.text; g.font = 'bold 16px monospace'; g.fillText(`${dist_m()} m`, W / 2, 30);
-    g.fillStyle = THEME.dim; g.font = '12px monospace'; g.fillText(`coins ${coins}`, W / 2, 48);
+    g.textAlign = 'center'; g.fillStyle = THEME.text; g.font = 'bold 16px monospace'; g.fillText(`SCORE ${score()}`, W / 2, 30);
+    g.fillStyle = THEME.dim; g.font = '12px monospace'; g.fillText(`${dist_m()} m · coins ${coins}`, W / 2, 48);
     for (let i = 0; i < 3; i++) { g.fillStyle = i < Math.ceil(car.hp / 34) ? THEME.bad : THEME.ground; g.fillRect(W / 2 - 25 + i * 18, 58, 14, 10); }
     g.strokeStyle = THEME.dim; g.lineWidth = 1; g.strokeRect(W - 160, 74, 140, 12);
     g.fillStyle = car.fuel > 25 ? THEME.good : THEME.bad; g.fillRect(W - 159, 75, Math.max(0, car.fuel) * 1.38, 10);
