@@ -71,6 +71,7 @@ html.is-play body {
 }
 .pl-score span { font-size: 18px; color: var(--soft); }
 .pl-score b { font-weight: 400; font-size: 30px; min-width: 3ch; }
+.pl-score b.pl-best { font-size: 18px; min-width: 3ch; color: var(--soft); }
 .pl-score em { font-style: normal; font-size: 20px; color: var(--c); }
 .pl-score em:empty { display: none; }
 .pl-tools { display: flex; gap: 6px; pointer-events: auto; }
