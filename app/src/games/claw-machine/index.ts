@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { GameContext, GameInstance } from '../../play/types';
 import {
   CHUTE, FLOOR_Y, RAIL_Y, START_CREDITS, VOICE_WORDS,
-  buildPrizes, clawRig, createClawState, startGrab, step, voiceThreshold,
+  buildPrizes, clawRig, createClawState, modelUrls, startGrab, step, voiceThreshold,
   type Action, type ClawState, type Input, type Prize,
 } from './logic';
 import './claw.css';
@@ -28,12 +28,10 @@ async function detectBrave(): Promise<boolean> {
   }
 }
 
-/**
- * The pretrained 18-word model, served from this app rather than Google's CDN. Brave Shields
- * (and plenty of corporate proxies) block storage.googleapis.com, which left the game with no
- * voice at all. Vendoring the ~5.6 MB of weights also makes the game work offline.
- */
-const MODEL_BASE = '/models/speech-commands/18w';
+// The pretrained 18-word model is served from this app rather than Google's CDN: Brave
+// Shields (and plenty of corporate proxies) block storage.googleapis.com, which left the game
+// with no voice at all. Vendoring the ~5.6 MB of weights also makes the game work offline.
+// modelUrls() lives in logic.ts so the absolute-URL rule is covered by tests.
 
 /**
  * Loads the pretrained 18-word browser speech-commands model (TensorFlow.js). It ships the
@@ -58,8 +56,9 @@ async function loadVoiceModel(preferCpu: boolean) {
   }
   await ready();
   // vocabulary must be null when custom URLs are supplied.
+  const urls = modelUrls(location.origin);
   const recognizer = speechCommands.create(
-    'BROWSER_FFT', null as unknown as string, `${MODEL_BASE}/model.json`, `${MODEL_BASE}/metadata.json`,
+    'BROWSER_FFT', null as unknown as string, urls.model, urls.metadata,
   );
   await recognizer.ensureModelLoaded();
   return { recognizer, backend: getBackend() };

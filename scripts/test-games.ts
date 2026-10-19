@@ -13,7 +13,7 @@ import {
 import {
   BOUNDS, CHUTE, FLOOR_Y, GRAB_RADIUS, HOLD_FRACTION, MOVE_SPEED, ROUND_SECONDS,
   RAIL_Y, START_CREDITS, TRAVEL_Y, VOICE_WORDS, buildPrizes, createClawState, resolveGrab, startGrab,
-  clawRig, step, voiceThreshold,
+  MODEL_PATH, clawRig, modelUrls, step, voiceThreshold,
   type ClawState, type Input, type Prize,
 } from '../app/src/games/claw-machine/logic';
 
@@ -583,12 +583,35 @@ check('lowering lengthens the cable, lifting shortens it', () => {
 
 console.log('\nClaw Machine · bundled model');
 
+check('model URLs are absolute, as the metadata loader demands', () => {
+  // speech-commands' loadMetadataJson only accepts a string starting with http:// or
+  // https://; a root-relative path throws "Unsupported URL scheme in metadata URL".
+  for (const origin of ['http://localhost:5173', 'https://arcade.example.com']) {
+    const urls = modelUrls(origin);
+    for (const [name, url] of Object.entries(urls)) {
+      assert(/^https?:\/\//.test(url), `${name} URL must be absolute, got "${url}"`);
+      assert(url.startsWith(origin), `${name} URL should stay on this origin, got "${url}"`);
+      assert(!url.includes('//models'), `${name} URL has a doubled slash: "${url}"`);
+    }
+  }
+});
+
+check('model URLs point at the files that are actually on disk', () => {
+  const urls = modelUrls('http://localhost:5173');
+  for (const url of Object.values(urls)) {
+    const relative = new URL(url).pathname;
+    assert(existsSync(join(root, 'app/public', relative)), `nothing served at ${relative}`);
+  }
+  assert(urls.model.endsWith(`${MODEL_PATH}/model.json`), 'model URL should end at model.json');
+  assert(urls.metadata.endsWith(`${MODEL_PATH}/metadata.json`), 'metadata URL should end at metadata.json');
+});
+
 check('the pretrained model is served by this app, not a third-party CDN', () => {
   const source = readFileSync(join(root, 'app/src/games/claw-machine/index.ts'), 'utf8');
   // Strip comments: the CDN is named in a note explaining why we stopped using it.
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   assert(!code.includes('storage.googleapis.com'), 'the game should not fetch the model from a CDN');
-  assert(code.includes('/models/speech-commands/18w'), 'the game should load the vendored model');
+  assert(code.includes('modelUrls('), 'the game should build its model URLs through modelUrls()');
 });
 
 check('every file the model manifest needs is present and complete', () => {

@@ -53,6 +53,19 @@ export const PRIZE_KINDS = [
   { name: 'PURPLE CAT', color: '#b88cff', accent: '#ecdfff', value: 200, radius: 0.5 },
 ];
 
+/** Where the vendored 18-word speech-commands model lives, relative to the site root. */
+export const MODEL_PATH = '/models/speech-commands/18w';
+
+/**
+ * Absolute URLs for the bundled model. speech-commands' metadata loader checks the string
+ * starts with "http://" or "https://" and throws "Unsupported URL scheme" on anything else,
+ * so a root-relative path is not enough — it has to be fully qualified.
+ */
+export function modelUrls(origin: string) {
+  const base = new URL(MODEL_PATH, origin).href.replace(/\/$/, '');
+  return { model: `${base}/model.json`, metadata: `${base}/metadata.json` };
+}
+
 /** The five words the pretrained speech-commands model maps onto the five actions. */
 export const VOICE_WORDS: Record<string, Action> = {
   up: 'up', down: 'down', left: 'left', right: 'right', go: 'grab',
