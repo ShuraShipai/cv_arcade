@@ -46,7 +46,7 @@ export function mount(root: HTMLElement, game: Game): void {
   <div class="pl" style="--c:${game.color}">
     <div class="pl-view" id="plView"></div>
     <div class="pl-hud" id="plHud" hidden>
-      <div class="pl-score"><span>SCORE</span><b id="plScore">0</b><em id="plInfo"></em></div>
+      <div class="pl-score"><span>SCORE</span><b id="plScore">0</b><span>BEST</span><b id="plBest" class="pl-best">0</b><em id="plInfo"></em></div>
       <div class="pl-tools">
         <button type="button" class="pl-tool" data-act="pause" aria-label="Pause">II</button>
         <button type="button" class="pl-tool" data-act="mute" aria-pressed="false" aria-label="Mute sound">SND</button>
@@ -72,7 +72,7 @@ export function mount(root: HTMLElement, game: Game): void {
 
   const $ = <T extends HTMLElement>(id: string) => root.querySelector<T>('#' + id)!;
   const view = $('plView'), hud = $('plHud'), overlay = $('plOverlay');
-  const scoreEl = $('plScore'), infoEl = $('plInfo');
+  const scoreEl = $('plScore'), bestEl = $('plBest'), infoEl = $('plInfo');
   const camBox = $('plCam'), video = $<HTMLVideoElement>('plVideo'), camCv = $<HTMLCanvasElement>('plCamCv');
   const light = $('plLight'), meter = $('plMeter'), meterFill = $('plMeterFill');
   const debugEl = $('plDebug');
@@ -86,7 +86,8 @@ export function mount(root: HTMLElement, game: Game): void {
   let instance: GameInstance | null = null;
   let camStream: MediaStream | null = null, micStream: MediaStream | null = null;
   let tracker: HandTracker | null = null, mic: MicMeter | null = null;
-  let keyboardOnly = false, score = 0, countdownT = 0, lastShown = '';
+  let keyboardOnly = false, score = 0, bestShown = 0, countStart = 0, lastShown = '';
+  let countEl: HTMLElement | null = null;
   let raf = 0, last = performance.now();
 
   const loader = GAME_LOADERS[game.slug];
@@ -101,6 +102,7 @@ export function mount(root: HTMLElement, game: Game): void {
   function hide() {
     overlay.hidden = true;
     overlay.innerHTML = '';
+    countEl = null;
   }
 
   function showReady() {
@@ -127,9 +129,9 @@ export function mount(root: HTMLElement, game: Game): void {
     });
   }
 
-  function showStarting(msg: string) {
+  function showStarting(msg: string, hint = '') {
     phase = 'starting';
-    show(`<h2 class="pl-h" id="plTitle">${esc(game.title)}</h2><p class="pl-status blink-cur">${esc(msg)}</p>`);
+    show(`<h2 class="pl-h" id="plTitle">${esc(game.title)}</h2><p class="pl-status blink-cur">${esc(msg)}</p>${hint ? `<p class="pl-small">${esc(hint)}</p>` : ''}`);
   }
 
   function showError(msg: string) {
@@ -185,8 +187,41 @@ export function mount(root: HTMLElement, game: Game): void {
     meter.hidden = true;
   }
 
+  function pictureProblem(videoEl: HTMLVideoElement): Error {
+    const stream = videoEl.srcObject;
+    const track = stream instanceof MediaStream ? stream.getVideoTracks()[0] : undefined;
+    if (!track) return new Error('The camera stream was lost. Press Start again.');
+    if (track.readyState === 'ended') return new Error('The camera was closed by the system. Close other apps that use the camera (Zoom, OBS, a Python script), then press Start again.');
+    if (!videoEl.videoWidth) return new Error('The camera opened but sent no picture. Close other apps that use the camera (Zoom, OBS, a Python script), then press Start again.');
+    return new Error('The camera picture did not start. Reload the page and press Start again.');
+  }
+
+  // The picture is ready when the first frame actually arrives, not when play() is called:
+  // play() can sit pending forever while the camera warms up or sends nothing.
+  function waitPicture(videoEl: HTMLVideoElement): Promise<void> {
+    videoEl.muted = true;
+    return new Promise((resolve, reject) => {
+      let done = false;
+      let timer = 0;
+      const finish = (err?: Error) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        if (err) reject(err); else resolve();
+      };
+      timer = window.setTimeout(() => finish(pictureProblem(videoEl)), 12000);
+      if (typeof videoEl.requestVideoFrameCallback === 'function') videoEl.requestVideoFrameCallback(() => finish());
+      else videoEl.addEventListener('loadeddata', () => finish(), { once: true });
+      videoEl.play().catch((e) => {
+        const name = (e as DOMException)?.name ?? 'error';
+        finish(new Error(`The camera picture did not start (${name}). Reload the page and press Start again.`));
+      });
+    });
+  }
+
   async function start(withKeyboard: boolean) {
     keyboardOnly = withKeyboard || game.needs === 'none';
+    sound.warm();
     showStarting('Starting...');
     // Fullscreen needs the click that got us here, so ask for it first. Refused = play windowed.
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
@@ -194,16 +229,16 @@ export function mount(root: HTMLElement, game: Game): void {
     }
     try {
       if (!keyboardOnly && game.needs === 'camera' && !tracker) {
-        showStarting('Waiting for the camera...');
+        showStarting('Waiting for the camera...', 'If no permission pop-up appears, press Esc — fullscreen may be hiding it.');
         camStream = await requestCamera();
         video.srcObject = camStream;
-        await video.play();
+        camBox.hidden = false;
+        await waitPicture(video);
         showStarting('Loading the hand model...');
         tracker = await startHandTracker(video);
-        camBox.hidden = false;
       }
       if (!keyboardOnly && game.needs === 'mic' && !mic) {
-        showStarting('Waiting for the microphone...');
+        showStarting('Waiting for the microphone...', 'If no permission pop-up appears, press Esc — fullscreen may be hiding it.');
         micStream = await requestMic();
         mic = startMic(micStream);
         meter.hidden = false;
@@ -224,6 +259,8 @@ export function mount(root: HTMLElement, game: Game): void {
     instance = null;
     view.innerHTML = '';
     score = 0;
+    bestShown = getBest(game.slug);
+    bestEl.textContent = String(bestShown);
     setScore(0);
     infoEl.textContent = '';
     const ctx: GameContext = {
@@ -241,8 +278,11 @@ export function mount(root: HTMLElement, game: Game): void {
       phase = 'playing';
     } else {
       phase = 'countdown';
-      countdownT = 0;
+      countStart = performance.now();
       lastShown = '';
+      overlay.hidden = false;
+      overlay.innerHTML = `<div class="pl-count${reducedMotion ? '' : ' pop'}" aria-live="assertive">3</div>`;
+      countEl = overlay.querySelector<HTMLElement>('.pl-count');
     }
   }
 
@@ -250,6 +290,10 @@ export function mount(root: HTMLElement, game: Game): void {
     score = Math.floor(s);
     const t = String(score);
     if (scoreEl.textContent !== t) scoreEl.textContent = t;
+    if (score > bestShown) {
+      bestShown = score;
+      bestEl.textContent = t;
+    }
   }
 
   function resume() {
@@ -318,14 +362,15 @@ export function mount(root: HTMLElement, game: Game): void {
 
   /* ---------- per-frame: game, countdown, preview, meter, debug ---------- */
   function drawPreview() {
-    const st = tracker?.state;
-    if (!st || camBox.hidden) return;
+    if (camBox.hidden) return;
     const w = camCv.width, h = camCv.height;
     camG.save();
     camG.translate(w, 0);
     camG.scale(-1, 1);
     camG.drawImage(video, 0, 0, w, h);
     camG.restore();
+    const st = tracker?.state;
+    if (!st) return;
     camG.fillStyle = '#19f0ff';
     for (const p of st.landmarks) camG.fillRect(p.x * w - 1.5, p.y * h - 1.5, 3, 3);
     if (debug && st.landmarks.length) {
@@ -367,16 +412,20 @@ export function mount(root: HTMLElement, game: Game): void {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     if (phase === 'countdown') {
-      countdownT += dt;
-      const n = 3 - Math.floor(countdownT / 0.8);
+      const e = (now - countStart) / 1000;
+      const n = 3 - Math.floor(e / 0.8);
       const label = n > 0 ? String(n) : 'GO';
       if (label !== lastShown) {
         lastShown = label;
-        overlay.hidden = false;
-        overlay.innerHTML = `<div class="pl-count${reducedMotion ? '' : ' pop'}" aria-live="assertive">${label}</div>`;
+        if (countEl) {
+          countEl.textContent = label;
+          countEl.classList.remove('pop');
+          void countEl.offsetWidth;
+          if (!reducedMotion) countEl.classList.add('pop');
+        }
         sound.beep(n > 0 ? 440 : 880, 0.12);
       }
-      if (countdownT >= 2.8) {
+      if (e >= 2.8) {
         hide();
         phase = 'playing';
       }

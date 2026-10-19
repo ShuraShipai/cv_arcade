@@ -23,24 +23,46 @@ function explain(err: unknown, device: 'camera' | 'mic'): MediaError {
 
 export async function requestCamera(): Promise<MediaStream> {
   try {
-    return await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-      audio: false,
-    });
+    return await answer(
+      navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        audio: false,
+      }),
+      'camera',
+    );
   } catch (err) {
-    throw explain(err, 'camera');
+    throw err instanceof MediaError ? err : explain(err, 'camera');
   }
 }
 
 export async function requestMic(): Promise<MediaStream> {
   try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      video: false,
-    });
+    return await answer(
+      navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        video: false,
+      }),
+      'mic',
+    );
   } catch (err) {
-    throw explain(err, 'mic');
+    throw err instanceof MediaError ? err : explain(err, 'mic');
   }
+}
+
+const NO_ANSWER_MS = 12000;
+
+// The permission prompt can stay unanswered forever (hidden by fullscreen, page unfocused),
+// so give up with a fix instead of hanging; if the stream arrives late, close it.
+function answer(p: Promise<MediaStream>, device: 'camera' | 'mic'): Promise<MediaStream> {
+  let timer = 0;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(() => {
+      p.then(stopStream).catch(() => undefined);
+      const Dev = device === 'camera' ? 'Camera' : 'Microphone';
+      reject(new MediaError(`${Dev} never answered. Press Esc — fullscreen may be hiding the permission pop-up — allow it, then press Start again.`, device));
+    }, NO_ANSWER_MS);
+  });
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
 
 export function stopStream(stream: MediaStream | null | undefined): void {
