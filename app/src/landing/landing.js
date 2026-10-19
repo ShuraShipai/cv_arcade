@@ -204,8 +204,32 @@ var duel=(function(){
   }}
 })();
 
+/* ---- Apex Drive ---- */
+var drive=(function(){
+  return {reset:function(){},draw:function(t){
+    var i,ph=(t*38)%34,roadTop=66,center=W/2;
+    var sky=g.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#10172a');sky.addColorStop(.58,'#33203e');sky.addColorStop(1,'#e76b68');g.fillStyle=sky;g.fillRect(0,0,W,H);
+    R(0,62,W,42,'#171426');
+    for(i=0;i<18;i++){var bx=i*17,bh=12+(i*29%31);R(bx,roadTop-bh,14,bh,'#0b1020');R(bx+3,roadTop-bh+4,2,2,'#ffb84d');R(bx+9,roadTop-bh+10,2,2,'#633b69')}
+    R(0,104,W,88,'#11151e');
+    poly([[-2,roadTop],[2,roadTop],[center+112,H],[center-112,H]],0,0,'#333943');
+    poly([[-2,roadTop],[2,roadTop],[center+112,H],[center-112,H]],0,0,null,'#e7c36c');
+    for(i=0;i<8;i++){var p=(i/8+ph/34)%1,sz=1+p*2.8,yy=roadTop+Math.pow(p,1.55)*(H-roadTop);R(center-1.5*sz,yy,3*sz,Math.max(1,3*p),'#d6dce3')}
+    var ox=center+Math.sin(t*1.6)*18,oy=96;
+    R(ox-8,oy-5,16,10,'#e7a73e');R(ox-5,oy-10,10,6,'#354d61');R(ox-7,oy+3,4,2,'#fff0c2');R(ox+3,oy+3,4,2,'#fff0c2');
+    var cx=center+Math.sin(t*1.1)*35,cy=158;
+    poly([[-27,7],[-23,-3],[-14,-8],[-11,-20],[11,-20],[15,-8],[24,-3],[28,7],[24,17],[-24,17]],cx,cy,'#d82e4e');
+    poly([[-12,-7],[-8,-17],[8,-17],[13,-7]],cx,cy,'#183346');
+    R(cx-22,cy-1,5,5,'#ff374f');R(cx+17,cy-1,5,5,'#ff374f');
+    R(cx-26,cy+10,6,7,'#0a0d13');R(cx+20,cy+10,6,7,'#0a0d13');
+    T('APEX DRIVE',W/2,8,24,'#fff','center');
+    T('BEAT THE RIVAL  ·  BRAKE FOR CORNERS',W/2,34,14,'#ffe14a','center');
+    T('NIGHT CIRCUIT',W/2,174,16,'#fff','center');
+  }};
+})();
+
 /* ---- game data ---- */
-var DEMOS={'rail-rush':rail,'hill-climb':hill,'rps':rps,'scream-chicken':chick,'quiz-battle':duel};
+var DEMOS={'apex-drive':drive,'rail-rush':rail,'hill-climb':hill,'rps':rps,'scream-chicken':chick,'quiz-battle':duel};
 var LIST=GAMES.map(function(G){
   var m=INPUT_META[G.input];
   return {slug:G.slug,title:G.title,name:G.title.toUpperCase(),tag:m.tag,kind:m.kind,c:G.color,players:G.players,

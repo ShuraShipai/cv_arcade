@@ -235,7 +235,7 @@ export function mount(root: HTMLElement, game: Game): void {
         camBox.hidden = false;
         await waitPicture(video);
         showStarting('Loading the hand model...');
-        tracker = await startHandTracker(video);
+        tracker = await startHandTracker(video, game.slug === 'apex-drive' ? 2 : 1);
       }
       if (!keyboardOnly && game.needs === 'mic' && !mic) {
         showStarting('Waiting for the microphone...', 'If no permission pop-up appears, press Esc — fullscreen may be hiding it.');
@@ -372,7 +372,8 @@ export function mount(root: HTMLElement, game: Game): void {
     const st = tracker?.state;
     if (!st) return;
     camG.fillStyle = '#19f0ff';
-    for (const p of st.landmarks) camG.fillRect(p.x * w - 1.5, p.y * h - 1.5, 3, 3);
+    const tracked = st.hands?.length ? st.hands.flatMap((hand) => hand.landmarks) : st.landmarks;
+    for (const p of tracked) camG.fillRect(p.x * w - 1.5, p.y * h - 1.5, 3, 3);
     if (debug && st.landmarks.length) {
       camG.fillStyle = '#ffe14a';
       camG.fillRect(st.x * w - 3, st.y * h - 3, 6, 6);

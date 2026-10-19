@@ -43,6 +43,32 @@ const MIC_HELP = [
 // List order on the cabinet: hand games first, then voice, then RAG.
 export const GAMES: Game[] = [
   {
+    slug: 'apex-drive',
+    title: 'Apex Drive',
+    input: 'hand',
+    players: '1 player',
+    color: INPUT_META.hand.color,
+    shortDescription: 'Beat a rival over three laps. Steer the bends and brake on time.',
+    rules: [
+      'Move both hands left or right in the camera preview to steer. Press Calibrate Hands with your hands centered first.',
+      'Open palms accelerate and fists brake. You can also hold the on-screen pedals.',
+      'Beat the rival over three laps. Collisions and taking corners too fast damage your car; three impacts or enough corner damage wrecks it.',
+    ],
+    controls: [
+      'Keyboard: left/right arrows or A/D steer; up/W accelerates; down/S or space brakes.',
+      'On-screen accelerator and brake: press and hold.',
+      'Camera steering: center both hands and press Calibrate Hands, then move both hands left/right. Open palms accelerate; fists brake.',
+    ],
+    scoring: 'Finish the race for distance points. Close passes add a bonus.',
+    tips: [
+      'Use short steering movements to stay centered in a lane.',
+      'Ease off the accelerator before traffic and use the brake to regain control.',
+      'If hand tracking is lost, throttle releases automatically. Use the on-screen pedals or keyboard.',
+    ],
+    needs: 'camera',
+    troubleshooting: CAMERA_HELP,
+  },
+  {
     slug: 'rail-rush',
     title: 'Rail Rush',
     input: 'hand',
