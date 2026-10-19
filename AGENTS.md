@@ -30,7 +30,7 @@ app/                         Vite root (vite.config.ts sets root: 'app')
   src/
     main.ts                  Entry. Picks the route, lazy-loads that page, mounts Pip
     router.ts                "/" | "/play/:slug" | missing. Navigation is a full page load
-    games.ts                 SINGLE SOURCE OF TRUTH for the five games (see below)
+    games.ts                 SINGLE SOURCE OF TRUTH for the seven games (see below)
     landing/landing.js       Cabinet, attract demos (256x192 pixel canvas), terrain (Three.js)
     play/
       page.ts                Game page shell: Ready screen, permissions, countdown, HUD, pause, game over
@@ -45,12 +45,15 @@ app/                         Vite root (vite.config.ts sets root: 'app')
     games/
       registry.ts            slug -> lazy import() of the game module (one chunk per game)
       shared/                canvas.ts (640x360 pixel surface), pixel.ts (palette + bitmaps)
-      rail-rush/  hill-climb/  rps/  scream-chicken/  quiz-battle/
+      apex-drive/  rail-rush/  hill-climb/  rps/  scream-chicken/  claw-machine/  quiz-battle/
+      apex-drive/physics.ts and claw-machine/logic.ts hold those games' rules with no
+      THREE or DOM imports, so npm test can drive them head-less
     pip/                     Guide bot: pip.ts (UI + chat), face.ts (16x16 face), bus.ts (openPip event)
     api/                     config.ts (env), chat.ts (SSE/JSON client), quiz.ts
     mocks/                   chat.ts and quiz.ts, used when VITE_USE_MOCK is not "false"
     lib/                     storage.ts (guarded local/session storage), sound.ts (beeps)
 scripts/export-kb.ts         Writes knowledge/*.md from games.ts
+scripts/test-games.ts        npm test: cabinet wiring + Apex Drive and Claw Machine rules
 knowledge/                   Generated. Do not hand-edit; edit games.ts and re-run export-kb
 ```
 

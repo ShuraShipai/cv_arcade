@@ -27,6 +27,8 @@ export interface HandState {
   landmarks: { x: number; y: number }[];
   /** Model frames per second, for ?debug=1. */
   fps: number;
+  /** All tracked hands. Existing games can keep using the primary-hand fields above. */
+  hands: { x: number; y: number; gesture: Gesture; confidence: number; landmarks: { x: number; y: number }[] }[];
 }
 
 export interface HandTracker {
@@ -50,14 +52,14 @@ export function classify(lm: P[]): Gesture {
   return count === 3 ? 'open' : 'none';
 }
 
-async function createLandmarker(): Promise<HandLandmarker> {
+async function createLandmarker(numHands: number): Promise<HandLandmarker> {
   const { FilesetResolver, HandLandmarker } = await import('@mediapipe/tasks-vision');
   const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
   const make = (delegate: 'GPU' | 'CPU') =>
     HandLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: MODEL_URL, delegate },
       runningMode: 'VIDEO',
-      numHands: 1,
+      numHands,
     });
   try {
     return await make('GPU');
@@ -67,17 +69,17 @@ async function createLandmarker(): Promise<HandLandmarker> {
 }
 
 /** Starts tracking on a playing <video>. Throws a plain-words Error if the model can't load. */
-export async function startHandTracker(video: HTMLVideoElement): Promise<HandTracker> {
+export async function startHandTracker(video: HTMLVideoElement, numHands = 1): Promise<HandTracker> {
   let landmarker: HandLandmarker;
   try {
-    landmarker = await createLandmarker();
+    landmarker = await createLandmarker(numHands);
   } catch {
     throw new Error('The hand model did not load. Check your internet connection, then press Start again.');
   }
 
   const state: HandState = {
     present: false, x: 0.5, y: 0.5, gesture: 'none', confidence: 0,
-    jumpEvent: 0, tilt: 0, landmarks: [], fps: 0,
+    jumpEvent: 0, tilt: 0, landmarks: [], fps: 0, hands: [],
   };
   const recent: Gesture[] = [];
   const trail: { y: number; t: number }[] = [];
@@ -92,6 +94,15 @@ export async function startHandTracker(video: HTMLVideoElement): Promise<HandTra
       const res = landmarker.detectForVideo(video, now);
       frames++;
       const raw = res.landmarks[0];
+      state.hands = res.landmarks.map((points, index) => {
+        const lm = points.map((p) => ({ x: 1 - p.x, y: p.y }));
+        const palm = [0, 5, 9, 13, 17].map((i) => lm[i]);
+        return {
+          x: palm.reduce((sum, point) => sum + point.x, 0) / palm.length,
+          y: palm.reduce((sum, point) => sum + point.y, 0) / palm.length,
+          gesture: classify(lm), confidence: res.handedness[index]?.[0]?.score ?? 0.8, landmarks: lm,
+        };
+      });
       if (raw) {
         const lm = raw.map((p) => ({ x: 1 - p.x, y: p.y }));
         const palm = [0, 5, 9, 13, 17].map((i) => lm[i]);
@@ -121,6 +132,7 @@ export async function startHandTracker(video: HTMLVideoElement): Promise<HandTra
         state.gesture = 'none';
         state.confidence = 0;
         state.landmarks = [];
+        state.hands = [];
         recent.length = 0;
         trail.length = 0;
       }

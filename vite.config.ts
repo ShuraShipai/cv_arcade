@@ -10,6 +10,11 @@ export default defineConfig(({ mode }) => {
   return {
     root: 'app',
     envDir: repoRoot,
+    resolve: {
+      // TensorFlow speech-commands uses Node's `util.promisify` only for file:// URLs.
+      // Resolve that import to the browser polyfill; model files use HTTPS in this app.
+      alias: [{ find: /^util$/, replacement: 'util/' }],
+    },
     build: {
       outDir: '../dist',
       emptyOutDir: true,

@@ -112,7 +112,7 @@ export function mount(root: HTMLElement, game: Game): void {
       <p class="pl-kicker">${game.input === 'rag' ? 'YOUR NOTES' : game.input.toUpperCase()} · ${esc(game.players.toUpperCase())}</p>
       <h1 class="pl-title" id="plTitle">${esc(game.title)}</h1>
       <ol class="pl-rules">${game.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ol>
-      <p class="pl-needs" data-need="${game.needs}">${NEEDS_TEXT[game.needs]}</p>
+      <p class="pl-needs" data-need="${game.needs}">${esc(game.needsText ?? NEEDS_TEXT[game.needs])}</p>
       ${slider}
       <button type="button" class="pl-btn pl-primary pl-big" data-act="start">Start</button>
       <div class="pl-row">
@@ -199,16 +199,18 @@ export function mount(root: HTMLElement, game: Game): void {
         video.srcObject = camStream;
         await video.play();
         showStarting('Loading the hand model...');
-        tracker = await startHandTracker(video);
+        tracker = await startHandTracker(video, game.slug === 'apex-drive' ? 2 : 1);
         camBox.hidden = false;
       }
       if (!keyboardOnly && game.needs === 'mic' && !mic) {
         showStarting('Waiting for the microphone...');
         micStream = await requestMic();
         mic = startMic(micStream);
-        meter.hidden = false;
-        showStarting('Stay quiet for 2 seconds while we measure the room...');
-        await mic.calibrate(2000);
+        meter.hidden = game.showMicMeter === false;
+        if (game.calibrateMic !== false) {
+          showStarting('Stay quiet for 2 seconds while we measure the room...');
+          await mic.calibrate(2000);
+        }
       }
       module = await modulePromise;
       if (!module) throw new Error('This game is not in the cabinet yet. Pick another game from the arcade.');
@@ -327,7 +329,8 @@ export function mount(root: HTMLElement, game: Game): void {
     camG.drawImage(video, 0, 0, w, h);
     camG.restore();
     camG.fillStyle = '#19f0ff';
-    for (const p of st.landmarks) camG.fillRect(p.x * w - 1.5, p.y * h - 1.5, 3, 3);
+    const tracked = st.hands?.length ? st.hands.flatMap((hand) => hand.landmarks) : st.landmarks;
+    for (const p of tracked) camG.fillRect(p.x * w - 1.5, p.y * h - 1.5, 3, 3);
     if (debug && st.landmarks.length) {
       camG.fillStyle = '#ffe14a';
       camG.fillRect(st.x * w - 3, st.y * h - 3, 6, 6);
