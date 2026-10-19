@@ -218,6 +218,7 @@ export const GAMES: Game[] = [
     ownsMicInput: true,
     troubleshooting: [
       'No voice input: tap Start Voice Controls after the model loads. The HEARD bar should move when you speak.',
+      'Brave: Shields perturb microphone and WebGL data to block fingerprinting, which breaks speech recognition. Click the Brave lion in the address bar and turn Shields down for this site, then press Start again.',
       'Heard but ignored: the match percentage is below the bar. Raise Mic sensitivity on the Ready screen, say one word at a time, and pause between words.',
       'Command model failed to load: check internet access and press Retry command model. The keys and the on-screen pad still work.',
       'Microphone blocked: click the microphone icon in the address bar, allow it, then press Start again.',

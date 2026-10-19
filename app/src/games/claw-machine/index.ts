@@ -14,23 +14,45 @@ import './claw.css';
 export const countdown = true;
 
 /**
+ * Brave's fingerprinting protection ("farbling") perturbs the two APIs this model depends on:
+ * AnalyserNode frequency data, which speech-commands reads as its spectrogram, and WebGL
+ * readback, which the tfjs WebGL backend uses to fetch tensor results. Detecting it lets us
+ * pick the CPU backend and point at Shields when recognition stays dead.
+ */
+async function detectBrave(): Promise<boolean> {
+  const brave = (navigator as Navigator & { brave?: { isBrave?: () => Promise<boolean> } }).brave;
+  try {
+    return (await brave?.isBrave?.()) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Loads the pretrained 18-word browser speech-commands model (TensorFlow.js). It ships the
  * five words this game needs: up, down, left, right and "go" (mapped to GRAB).
+ * Returns the recognizer and the backend it settled on, for the status line.
  */
-async function loadVoiceModel() {
-  const [{ ready, setBackend }, speechCommands] = await Promise.all([
+async function loadVoiceModel(preferCpu: boolean) {
+  const [{ ready, setBackend, getBackend }, speechCommands] = await Promise.all([
     import('@tensorflow/tfjs'),
     import('@tensorflow-models/speech-commands'),
   ]);
-  try {
-    if (!(await setBackend('webgl'))) await setBackend('cpu');
-  } catch {
+  // Farbled WebGL readback returns plausible-looking but wrong tensors, so prefer CPU there.
+  // This model is small enough that CPU keeps up with one window every few hundred ms.
+  if (preferCpu) {
     await setBackend('cpu');
+  } else {
+    try {
+      if (!(await setBackend('webgl'))) await setBackend('cpu');
+    } catch {
+      await setBackend('cpu');
+    }
   }
   await ready();
   const recognizer = speechCommands.create('BROWSER_FFT', '18w');
   await recognizer.ensureModelLoaded();
-  return recognizer;
+  return { recognizer, backend: getBackend() };
 }
 
 export function create(ctx: GameContext): GameInstance {
@@ -288,8 +310,9 @@ export function create(ctx: GameContext): GameInstance {
   window.addEventListener('blur', onBlur);
 
   /* ---------------- voice ---------------- */
-  type Recognizer = Awaited<ReturnType<typeof loadVoiceModel>>;
+  type Recognizer = Awaited<ReturnType<typeof loadVoiceModel>>['recognizer'];
   let recognizer: Recognizer | null = null;
+  let isBrave = false, backend = '';
   let listening = false, voiceBusy = false;
   let lastVoiceAt = 0, lastResultAt = 0;
   /** Best match from the most recent listening window, for the confidence bar. */
@@ -309,13 +332,18 @@ export function create(ctx: GameContext): GameInstance {
     voiceBtn.hidden = true;
     setVoice('LOADING COMMAND MODEL');
     try {
-      recognizer = await loadVoiceModel();
+      isBrave = await detectBrave();
+      const loaded = await loadVoiceModel(isBrave);
+      recognizer = loaded.recognizer;
+      backend = loaded.backend;
       setVoice('MODEL READY · TAP START VOICE CONTROLS');
       voiceBtn.textContent = 'START VOICE CONTROLS';
     } catch (error) {
       recognizer = null;
       const detail = error instanceof Error ? error.message : 'DOWNLOAD FAILED';
-      setVoice(`MODEL FAILED · ${detail.slice(0, 36).toUpperCase()} · USE KEYS`);
+      setVoice(isBrave
+        ? 'MODEL BLOCKED · LOWER BRAVE SHIELDS FOR THIS SITE · USE KEYS'
+        : `MODEL FAILED · ${detail.slice(0, 36).toUpperCase()} · USE KEYS`);
       voiceBtn.textContent = 'RETRY COMMAND MODEL';
     } finally {
       voiceBusy = false;
@@ -363,7 +391,9 @@ export function create(ctx: GameContext): GameInstance {
       listening = true;
       lastResultAt = performance.now();
       voiceBtn.hidden = true;
-      setVoice('MIC LIVE · SAY LEFT RIGHT UP DOWN GO', true);
+      setVoice(ctx.debug
+        ? `MIC LIVE · ${backend.toUpperCase()}${isBrave ? ' · BRAVE' : ''}`
+        : 'MIC LIVE · SAY LEFT RIGHT UP DOWN GO', true);
     } catch (error) {
       listening = false;
       voiceBtn.disabled = false;
@@ -417,7 +447,9 @@ export function create(ctx: GameContext): GameInstance {
     // A listening recognizer that stops delivering windows means the audio path died.
     if (listening && performance.now() - lastResultAt > 6000) {
       listening = false;
-      setVoice('NO AUDIO FROM THE MIC · USE KEYS OR RETRY');
+      setVoice(isBrave
+        ? 'NO AUDIO · BRAVE SHIELDS FARBLE THE MIC · LOWER SHIELDS OR USE KEYS'
+        : 'NO AUDIO FROM THE MIC · USE KEYS OR RETRY');
       voiceBtn.textContent = 'RETRY VOICE CONTROLS';
       voiceBtn.disabled = false;
       voiceBtn.hidden = false;
