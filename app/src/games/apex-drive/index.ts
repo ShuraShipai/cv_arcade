@@ -140,7 +140,8 @@ export function create(ctx: GameContext): GameInstance {
     group.position.set(lane, 0, z); scene.add(group);
     const o = { root: group, x: lane, z, hit: false }; obstacles.push(o); return o;
   }
-  for (let i = 0; i < 9; i++) makeObstacle(-48 - i * 19, lanes[Math.floor(Math.random() * lanes.length)]);
+  // Keep traffic readable and leave more time between cars, especially for camera steering.
+  for (let i = 0; i < 6; i++) makeObstacle(-55 - i * 30, lanes[Math.floor(Math.random() * lanes.length)]);
 
   const $ = <T extends Element>(sel: string) => host.querySelector<T>(sel)!;
   const wheelEl = $<HTMLElement>('[data-wheel]'), message = $<HTMLElement>('[data-message]');
@@ -230,10 +231,10 @@ export function create(ctx: GameContext): GameInstance {
 
     const events = stepDrive(car$, dt, { steer: desiredSteer, gas, brake });
 
-    wheelAngle += (car$.steer * 38 - wheelAngle) * Math.min(1, dt * 8);
+    wheelAngle += (car$.steer * 38 - wheelAngle) * Math.min(1, dt * 6);
     wheelEl.style.transform = `rotate(${wheelAngle}deg)`;
     $('[data-steer-value]').textContent = `CAMERA STEERING · ${car$.steer < -0.12 ? 'LEFT' : car$.steer > 0.12 ? 'RIGHT' : 'CENTER'}`;
-    car.position.x += (car$.carX - car.position.x) * Math.min(1, dt * 7);
+    car.position.x += (car$.carX - car.position.x) * Math.min(1, dt * 5);
     car.rotation.z = -car$.steer * 0.075;
     const speedFactor = 0.27 + car$.speed / 180;
     const worldStep = speedFactor * dt * 17;
@@ -253,7 +254,7 @@ export function create(ctx: GameContext): GameInstance {
         }
       }
       if (o.z > 18) {
-        o.z = -150 - Math.random() * 50;
+        o.z = -190 - Math.random() * 75;
         o.x = lanes[Math.floor(Math.random() * lanes.length)];
         o.hit = false; o.root.position.x = o.x;
       }

@@ -87,14 +87,14 @@ export function stepDrive(state: DriveState, dt: number, controls: Controls): Dr
   if (state.ended) return events;
   state.elapsed += dt;
 
-  state.steer += (controls.steer - state.steer) * Math.min(1, dt * 7.5);
+  state.steer += (controls.steer - state.steer) * Math.min(1, dt * 5);
   if (controls.gas) state.speed += 84 * dt;
   else state.speed -= 25 * dt;
   if (controls.brake) state.speed -= 155 * dt;
   state.speed = Math.max(0, Math.min(TOP_SPEED, state.speed));
 
   // Steering authority grows with speed, so the car feels heavy from a standstill.
-  state.carX += state.steer * (3.3 + state.speed / 45) * dt;
+  state.carX += state.steer * (2.6 + state.speed / 55) * dt;
   state.carX = Math.max(-MAX_X, Math.min(MAX_X, state.carX));
 
   state.distance += state.speed * dt / 3.6;

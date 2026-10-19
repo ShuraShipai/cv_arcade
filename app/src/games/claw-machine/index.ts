@@ -38,21 +38,17 @@ async function detectBrave(): Promise<boolean> {
  * five words this game needs: up, down, left, right and "go" (mapped to GRAB).
  * Returns the recognizer and the backend it settled on, for the status line.
  */
-async function loadVoiceModel(preferCpu: boolean) {
+async function loadVoiceModel() {
   const [{ ready, setBackend, getBackend }, speechCommands] = await Promise.all([
     import('@tensorflow/tfjs'),
     import('@tensorflow-models/speech-commands'),
   ]);
-  // Farbled WebGL readback returns plausible-looking but wrong tensors, so prefer CPU there.
-  // This model is small enough that CPU keeps up with one window every few hundred ms.
-  if (preferCpu) {
+  // WebGL everywhere: CPU inference on this model is several times slower, and the earlier
+  // Brave-specific CPU path was guesswork for a failure that turned out to be the blocked CDN.
+  try {
+    if (!(await setBackend('webgl'))) await setBackend('cpu');
+  } catch {
     await setBackend('cpu');
-  } else {
-    try {
-      if (!(await setBackend('webgl'))) await setBackend('cpu');
-    } catch {
-      await setBackend('cpu');
-    }
   }
   await ready();
   // vocabulary must be null when custom URLs are supplied.
@@ -120,10 +116,11 @@ export function create(ctx: GameContext): GameInstance {
   camera.position.set(0, 6.4, 12.4);
   camera.lookAt(0, 3.1, 0);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+  // A Retina panel at 1.7 renders ~2.9x the pixels of the CSS size. 1.5 looks the same here.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ctx.reducedMotion ? 1 : 1.5));
   renderer.setSize(sceneEl.clientWidth || 640, sceneEl.clientHeight || 360);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
@@ -133,9 +130,12 @@ export function create(ctx: GameContext): GameInstance {
   const key = new THREE.DirectionalLight('#fff3dc', 2.0);
   key.position.set(5, 12, 8);
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
-  key.shadow.camera.near = 1;
-  key.shadow.camera.far = 40;
+  key.shadow.mapSize.set(512, 512);
+  key.shadow.camera.near = 4;
+  key.shadow.camera.far = 26;
+  // Tighten the orthographic shadow frustum onto the cabinet so 512px goes further.
+  key.shadow.camera.left = -6; key.shadow.camera.right = 6;
+  key.shadow.camera.top = 6; key.shadow.camera.bottom = -6;
   scene.add(key);
   // Two marquee spots give the glass box its arcade glow.
   for (const [x, color] of [[-3.4, '#ff2bd6'], [3.4, '#19f0ff']] as const) {
@@ -150,10 +150,12 @@ export function create(ctx: GameContext): GameInstance {
   const bodyMat = new THREE.MeshStandardMaterial({ color: '#d62a66', metalness: 0.42, roughness: 0.36 });
   const trimMat = new THREE.MeshStandardMaterial({ color: '#ffe14a', metalness: 0.6, roughness: 0.3 });
   const darkMat = new THREE.MeshStandardMaterial({ color: '#1b1230', metalness: 0.3, roughness: 0.6 });
-  const glassMat = new THREE.MeshPhysicalMaterial({
-    color: '#b9eaff', metalness: 0, roughness: 0.04,
-    transmission: 0.82, thickness: 0.4, transparent: true, opacity: 0.22,
-    side: THREE.DoubleSide,
+  // Plain transparency, deliberately not MeshPhysicalMaterial transmission: transmission
+  // makes three.js re-render the whole scene into a separate target every frame, and with
+  // four panes filling the view that roughly doubled the cost of the game for a faint tint.
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: '#b9eaff', metalness: 0.1, roughness: 0.08,
+    transparent: true, opacity: 0.17, depthWrite: false, side: THREE.DoubleSide,
   });
   const steelMat = new THREE.MeshStandardMaterial({ color: '#b6c0d2', metalness: 0.9, roughness: 0.22 });
 
@@ -193,9 +195,9 @@ export function create(ctx: GameContext): GameInstance {
   for (const [ox, oz, sx, sz] of [[0, -0.78, 1.6, 0.1], [-0.78, 0, 0.1, 1.6]] as const) {
     addBox(chute, [sx, 0.34, sz], [ox, FLOOR_Y + 0.1, oz], trimMat, false);
   }
-  const chuteGlow = new THREE.PointLight('#ffe14a', 10, 4, 2);
-  chuteGlow.position.set(0, 1.1, 0);
-  chute.add(chuteGlow);
+  // The emissive trim reads as a lit chute without a fifth light in every shader.
+  addBox(chute, [1.3, 0.02, 1.3], [0, FLOOR_Y - 0.2, 0],
+    new THREE.MeshStandardMaterial({ color: '#ffe14a', emissive: '#ffb648', emissiveIntensity: 1.1 }), false);
 
   // Gantry: a rail across X that itself slides along Z, with the claw hanging beneath it.
   const railZ = new THREE.Group();
@@ -234,37 +236,54 @@ export function create(ctx: GameContext): GameInstance {
 
   /* ---------------- prizes ---------------- */
   const prizeMeshes = new Map<number, THREE.Group>();
+  // Ten prizes come from six kinds, so geometry and materials are shared rather than rebuilt
+  // per toy: ~100 meshes that would otherwise carry ~100 one-off materials and geometries.
+  const geoCache = new Map<string, THREE.BufferGeometry>();
+  const matCache = new Map<string, THREE.MeshStandardMaterial>();
+  const sphere = (r: number, w: number, h: number) => {
+    const key = `${r.toFixed(3)}:${w}x${h}`;
+    let geo = geoCache.get(key);
+    if (!geo) { geo = new THREE.SphereGeometry(r, w, h); geoCache.set(key, geo); }
+    return geo;
+  };
+  const plush = (color: string, roughness: number) => {
+    const key = `${color}:${roughness}`;
+    let mat = matCache.get(key);
+    if (!mat) { mat = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.02 }); matCache.set(key, mat); }
+    return mat;
+  };
+
   function buildPrizeMesh(p: Prize): THREE.Group {
     const root = new THREE.Group();
-    const plushMat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.82, metalness: 0.02 });
-    const accentMat = new THREE.MeshStandardMaterial({ color: p.accent, roughness: 0.7 });
+    const plushMat = plush(p.color, 0.82);
+    const accentMat = plush(p.accent, 0.7);
+    const eyeMat = plush('#17121f', 0.5);
     const r = p.radius;
-    const body = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), plushMat);
+    const body = new THREE.Mesh(sphere(r, 14, 10), plushMat);
     body.scale.set(1, 0.92, 0.9);
     body.castShadow = true;
     root.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(r * 0.66, 16, 12), plushMat);
+    const head = new THREE.Mesh(sphere(r * 0.66, 14, 10), plushMat);
     head.position.set(0, r * 0.95, 0);
     head.castShadow = true;
     root.add(head);
-    const belly = new THREE.Mesh(new THREE.SphereGeometry(r * 0.56, 12, 10), accentMat);
+    const belly = new THREE.Mesh(sphere(r * 0.56, 10, 8), accentMat);
     belly.position.set(0, -r * 0.05, r * 0.42);
     belly.scale.set(1, 0.9, 0.5);
     root.add(belly);
-    const eyeMat = new THREE.MeshStandardMaterial({ color: '#17121f' });
     for (const ex of [-1, 1]) {
-      const ear = new THREE.Mesh(new THREE.SphereGeometry(r * 0.26, 10, 8), plushMat);
+      const ear = new THREE.Mesh(sphere(r * 0.26, 8, 6), plushMat);
       ear.position.set(ex * r * 0.48, r * 1.42, 0);
       root.add(ear);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(r * 0.09, 8, 6), eyeMat);
+      const eye = new THREE.Mesh(sphere(r * 0.09, 6, 4), eyeMat);
       eye.position.set(ex * r * 0.22, r * 1.02, r * 0.56);
       root.add(eye);
-      const arm = new THREE.Mesh(new THREE.SphereGeometry(r * 0.26, 10, 8), plushMat);
+      const arm = new THREE.Mesh(sphere(r * 0.26, 8, 6), plushMat);
       arm.position.set(ex * r * 0.86, 0, r * 0.1);
       arm.scale.set(0.8, 0.7, 0.8);
       root.add(arm);
     }
-    const snout = new THREE.Mesh(new THREE.SphereGeometry(r * 0.2, 10, 8), accentMat);
+    const snout = new THREE.Mesh(sphere(r * 0.2, 8, 6), accentMat);
     snout.position.set(0, r * 0.85, r * 0.62);
     root.add(snout);
     root.rotation.y = Math.random() * Math.PI * 2;
@@ -342,7 +361,7 @@ export function create(ctx: GameContext): GameInstance {
     setVoice('LOADING COMMAND MODEL');
     try {
       isBrave = await detectBrave();
-      const loaded = await loadVoiceModel(isBrave);
+      const loaded = await loadVoiceModel();
       recognizer = loaded.recognizer;
       backend = loaded.backend;
       setVoice('MODEL READY · TAP START VOICE CONTROLS');
@@ -532,12 +551,20 @@ export function create(ctx: GameContext): GameInstance {
       window.removeEventListener('blur', onBlur);
       if (recognizer?.isListening()) void recognizer.stopListening().catch(() => undefined);
       recognizer = null;
+      // Geometry and materials are shared between prizes, so collect them before disposing.
+      const geometries = new Set<THREE.BufferGeometry>();
+      const materials = new Set<THREE.Material>();
       scene.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
-        if (mesh.geometry) mesh.geometry.dispose();
-        if (Array.isArray(mesh.material)) mesh.material.forEach((m) => m.dispose());
-        else if (mesh.material) mesh.material.dispose();
+        if (mesh.geometry) geometries.add(mesh.geometry);
+        if (Array.isArray(mesh.material)) mesh.material.forEach((m) => materials.add(m));
+        else if (mesh.material) materials.add(mesh.material);
       });
+      geometries.forEach((g) => g.dispose());
+      materials.forEach((m) => m.dispose());
+      geoCache.clear();
+      matCache.clear();
+      prizeMeshes.clear();
       renderer.dispose();
       renderer.domElement.remove();
       host.remove();

@@ -507,6 +507,32 @@ check('a collected prize cannot be grabbed again', () => {
   assert(again?.id !== target.id, 'a collected prize must not be grabbable again');
 });
 
+console.log('\nRender budget');
+
+check('the glass does not use transmission', () => {
+  // Regression: MeshPhysicalMaterial transmission makes three.js render the whole scene a
+  // second time into a separate target every frame. Four panes fill the view, so it roughly
+  // doubled the cost of the game for a faint tint. Plain transparency looks the same here.
+  const source = readFileSync(join(root, 'app/src/games/claw-machine/index.ts'), 'utf8');
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert(!/transmission\s*:/.test(code), 'the cabinet glass must not use a transmission pass');
+  assert(!/PCFSoftShadowMap/.test(code), 'PCF soft shadows are the most expensive filter here');
+});
+
+check('prize geometry and materials are shared, not rebuilt per toy', () => {
+  const source = readFileSync(join(root, 'app/src/games/claw-machine/index.ts'), 'utf8');
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert(code.includes('geoCache') && code.includes('matCache'),
+    'prizes should build through the shared geometry and material caches');
+  // Ten prizes from six kinds: a direct `new THREE.SphereGeometry` in the builder would mean
+  // one geometry per mesh again (100 instead of 30).
+  const builder = code.slice(code.indexOf('function buildPrizeMesh'), code.indexOf('const state:'));
+  assert(!builder.includes('new THREE.SphereGeometry'),
+    'buildPrizeMesh should take geometry from the cache, not allocate its own');
+  assert(!builder.includes('new THREE.MeshStandardMaterial'),
+    'buildPrizeMesh should take materials from the cache, not allocate its own');
+});
+
 console.log('\nBundle health');
 
 check('the browser bundle never reaches for Node\'s process', () => {
