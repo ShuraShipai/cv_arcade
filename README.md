@@ -6,7 +6,7 @@ Our team project from the training: computer vision, RAG, chatbots and LLMs.
 | Game | Input | Needs |
 | --- | --- | --- |
 | Rail Rush | Hand: position picks the lane, quick raise jumps, fist rolls | Camera |
-| Hill Climb | Hand: open palm gas, fist brake, tilt to lean | Camera |
+| Hill Climb | Hand: open palm gas, fist brake, index finger jump | Camera |
 | Rock Paper Scissors | Hand: fist, palm, two fingers | Camera |
 | Scream Chicken | Voice loudness: talk to walk, shout to jump | Microphone |
 | AI Quiz Battle | Questions written from a deck or your notes (RAG) | Nothing |
