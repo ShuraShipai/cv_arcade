@@ -61,7 +61,7 @@ export const GAMES: Game[] = [
     shortDescription: 'Beat a rival over three laps. Steer the bends and brake on time.',
     rules: [
       'Move both hands left or right in the camera preview to steer. Press Calibrate Hands with your hands centered first.',
-      'Open palms accelerate and fists brake. You can also hold the on-screen pedals.',
+      'Hold W/up arrow or the on-screen Accelerator to build speed. Open palms accelerate; fists, S/down arrow or space brake.',
       'Beat the rival over three laps. Collisions and taking corners too fast damage your car; three impacts or enough corner damage wrecks it.',
     ],
     controls: [

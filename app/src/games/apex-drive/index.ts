@@ -16,7 +16,7 @@ export function create(ctx: GameContext): GameInstance {
   host.className = 'ad-game';
   host.innerHTML = `
     <div class="ad-scene" aria-label="Three dimensional night racing circuit"></div>
-    <div class="ad-topline"><span class="ad-brand">APEX <b>DRIVE</b></span><span class="ad-track">3 LAP HEAD-TO-HEAD</span><span class="ad-condition">CAR <b data-condition>100%</b></span></div>
+    <div class="ad-topline"><span class="ad-brand">APEX <b>DRIVE</b></span><span class="ad-track">3 LAP HEAD-TO-HEAD</span><span class="ad-lives">LIVES <b data-lives>3 / 3</b></span><span class="ad-condition">CAR <b data-condition>100%</b></span></div>
     <div class="ad-race-progress"><div class="ad-race-track"><i data-rivalbar></i><b data-playerbar></b></div><span data-race-state>YOU vs RIVAL</span><span data-lap>LAP 1 / 3</span><span data-race-time>00:00</span></div>
     <div class="ad-speed"><strong data-speed>000</strong><span>KM/H</span><div class="ad-speed-track"><i data-speedbar></i></div></div>
     <div class="ad-message" data-message role="status">BEAT THE RIVAL · BRAKE FOR CORNERS · AVOID TRAFFIC</div>
@@ -29,7 +29,7 @@ export function create(ctx: GameContext): GameInstance {
           <button type="button" class="ad-pedal ad-brake" data-pedal="brake"><span>BRAKE</span><b>PRESS</b></button>
           <button type="button" class="ad-pedal ad-gas" data-pedal="gas"><span>ACCELERATOR</span><b>PRESS</b></button>
         </div>
-        <div class="ad-key-hint">A / D STEER <i>·</i> W ACCELERATE <i>·</i> S / SPACE BRAKE</div>
+        <div class="ad-key-hint">A / D STEER <i>·</i> HOLD ↑ / W OR ACCELERATOR TO GAIN SPEED <i>·</i> ↓ / S / SPACE BRAKE</div>
       </div>
       <div class="ad-telemetry"><span>DISTANCE <b data-distance>0.0 KM</b></span><span>BEST RUN <b data-best>0 PTS</b></span><div class="ad-condition-bar"><i data-conditionbar></i></div><small>0 CONDITION = WRECK</small></div>
     </div>`;
@@ -276,6 +276,7 @@ export function create(ctx: GameContext): GameInstance {
     $('[data-speed]').textContent = String(Math.round(car$.speed)).padStart(3, '0');
     $('[data-speedbar]').setAttribute('style', `transform:scaleX(${Math.min(1, car$.speed / 260)})`);
     $('[data-condition]').textContent = `${Math.round(car$.condition)}%`;
+    $('[data-lives]').textContent = `${Math.ceil(car$.condition / (100 / 3))} / 3`;
     $('[data-conditionbar]').setAttribute('style', `transform:scaleX(${car$.condition / 100})`);
     tracking.textContent = !ctx.hand ? 'CAMERA · OFF' : handActive ? `TRACKING · ${hands.length || 1} HAND${hands.length === 1 ? '' : 'S'}` : 'TRACKING · LOST';
     tracking.parentElement?.classList.toggle('is-lost', lost);
