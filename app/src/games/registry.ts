@@ -7,5 +7,6 @@ export const GAME_LOADERS: Record<string, () => Promise<GameModule>> = {
   'hill-climb': () => import('./hill-climb'),
   rps: () => import('./rps'),
   'scream-chicken': () => import('./scream-chicken'),
+  'claw-machine': () => import('./claw-machine'),
   'quiz-battle': () => import('./quiz-battle'),
 };

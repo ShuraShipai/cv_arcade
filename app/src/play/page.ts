@@ -88,6 +88,7 @@ export function mount(root: HTMLElement, game: Game): void {
   let tracker: HandTracker | null = null, mic: MicMeter | null = null;
   let keyboardOnly = false, score = 0, bestShown = 0, countStart = 0, lastShown = '';
   let countEl: HTMLElement | null = null;
+  let micGranted = false;
   let raf = 0, last = performance.now();
 
   const loader = GAME_LOADERS[game.slug];
@@ -114,7 +115,7 @@ export function mount(root: HTMLElement, game: Game): void {
       <p class="pl-kicker">${game.input === 'rag' ? 'YOUR NOTES' : game.input.toUpperCase()} · ${esc(game.players.toUpperCase())}</p>
       <h1 class="pl-title" id="plTitle">${esc(game.title)}</h1>
       <ol class="pl-rules">${game.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ol>
-      <p class="pl-needs" data-need="${game.needs}">${NEEDS_TEXT[game.needs]}</p>
+      <p class="pl-needs" data-need="${game.needs}">${esc(game.needsText ?? NEEDS_TEXT[game.needs])}</p>
       ${slider}
       <button type="button" class="pl-btn pl-primary pl-big" data-act="start">Start</button>
       <div class="pl-row">
@@ -182,6 +183,7 @@ export function mount(root: HTMLElement, game: Game): void {
     stopStream(camStream);
     stopStream(micStream);
     camStream = micStream = null;
+    micGranted = false;
     video.srcObject = null;
     camBox.hidden = true;
     meter.hidden = true;
@@ -236,14 +238,25 @@ export function mount(root: HTMLElement, game: Game): void {
         await waitPicture(video);
         showStarting('Loading the hand model...');
         tracker = await startHandTracker(video, game.slug === 'apex-drive' ? 2 : 1);
+        camBox.hidden = false;
       }
-      if (!keyboardOnly && game.needs === 'mic' && !mic) {
+      if (!keyboardOnly && game.needs === 'mic' && !mic && !micGranted) {
         showStarting('Waiting for the microphone...', 'If no permission pop-up appears, press Esc — fullscreen may be hiding it.');
         micStream = await requestMic();
-        mic = startMic(micStream);
-        meter.hidden = false;
-        showStarting('Stay quiet for 2 seconds while we measure the room...');
-        await mic.calibrate(2000);
+        if (game.ownsMicInput) {
+          // The game's own speech recognizer will reopen the device. Hand the mic back now:
+          // a second AudioContext on the same input reads silence and never fires a result.
+          micGranted = true;
+          stopStream(micStream);
+          micStream = null;
+        } else {
+          mic = startMic(micStream);
+          meter.hidden = game.showMicMeter === false;
+          if (game.calibrateMic !== false) {
+            showStarting('Stay quiet for 2 seconds while we measure the room...');
+            await mic.calibrate(2000);
+          }
+        }
       }
       module = await modulePromise;
       if (!module) throw new Error('This game is not in the cabinet yet. Pick another game from the arcade.');
@@ -267,6 +280,7 @@ export function mount(root: HTMLElement, game: Game): void {
       game, view, keys, settings, debug, sound, reducedMotion,
       hand: keyboardOnly ? null : tracker?.state ?? null,
       mic: keyboardOnly ? null : mic,
+      micGranted: !keyboardOnly && micGranted,
       setScore,
       setInfo: (t) => { if (infoEl.textContent !== t) infoEl.textContent = t; },
       gameOver: (s, note) => { if (phase === 'playing') { setScore(s); showOver(Math.floor(s), note); } },

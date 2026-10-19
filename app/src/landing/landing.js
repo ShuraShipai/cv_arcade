@@ -204,7 +204,7 @@ var duel=(function(){
   }}
 })();
 
-/* ---- Apex Drive ---- */
+/* ---- 6. Apex Drive ---- */
 var drive=(function(){
   return {reset:function(){},draw:function(t){
     var i,ph=(t*38)%34,roadTop=66,center=W/2;
@@ -215,7 +215,8 @@ var drive=(function(){
     poly([[-2,roadTop],[2,roadTop],[center+112,H],[center-112,H]],0,0,'#333943');
     poly([[-2,roadTop],[2,roadTop],[center+112,H],[center-112,H]],0,0,null,'#e7c36c');
     for(i=0;i<8;i++){var p=(i/8+ph/34)%1,sz=1+p*2.8,yy=roadTop+Math.pow(p,1.55)*(H-roadTop);R(center-1.5*sz,yy,3*sz,Math.max(1,3*p),'#d6dce3')}
-    var ox=center+Math.sin(t*1.6)*18,oy=96;
+    // Three traffic lanes and a coupe seen from behind.
+    var ox=center+Math.sin(t*1.6)*18,oy=96,os=.35;
     R(ox-8,oy-5,16,10,'#e7a73e');R(ox-5,oy-10,10,6,'#354d61');R(ox-7,oy+3,4,2,'#fff0c2');R(ox+3,oy+3,4,2,'#fff0c2');
     var cx=center+Math.sin(t*1.1)*35,cy=158;
     poly([[-27,7],[-23,-3],[-14,-8],[-11,-20],[11,-20],[15,-8],[24,-3],[28,7],[24,17],[-24,17]],cx,cy,'#d82e4e');
@@ -228,8 +229,40 @@ var drive=(function(){
   }};
 })();
 
+/* ---- Claw Machine attract demo ---- */
+var claw=(function(){
+  var TOYS=[[76,140,'#f2884c'],[100,142,'#f5c6dd'],[124,139,'#6fd8ff'],[148,142,'#ffe14a'],[172,140,'#7fdc8a'],[88,152,'#b88cff'],[136,152,'#f2884c'],[160,151,'#6fd8ff']];
+  function toy(x,y,c,s){s=s||1;R(x-5*s,y-4*s,10*s,9*s,c);R(x-7*s,y-2*s,3*s,6*s,c);R(x+4*s,y-2*s,3*s,6*s,c);R(x-4*s,y-9*s,8*s,6*s,c);R(x-6*s,y-11*s,3*s,3*s,c);R(x+3*s,y-11*s,3*s,3*s,c);R(x-2*s,y-7*s,2*s,2*s,'#17121f');R(x+1*s,y-7*s,2*s,2*s,'#17121f')}
+  return {reset:function(){},draw:function(t){
+    var i,ph=(t*.42)%4;
+    var bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#120a24');bg.addColorStop(1,'#2a1142');g.fillStyle=bg;g.fillRect(0,0,W,H);
+    grid();
+    // Cabinet shell, marquee and glass box.
+    box(52,26,152,142,'#d62a66','#ffe14a',3);
+    R(52,26,152,17,'#b01f52');T('PRIZE CLAW',128,26,16,'#ffe14a','center');
+    box(58,47,140,106,'rgba(140,220,255,.14)','#9fd8f2',1);
+    R(58,149,140,7,'#ffe14a');
+    // Prize pit.
+    for(i=0;i<TOYS.length;i++)toy(TOYS[i][0],TOYS[i][1],TOYS[i][2]);
+    // Chute in the front-left corner.
+    box(60,140,20,15,'#0d0820','#ffe14a',1);
+    // Gantry rail, cable and the three-finger claw sweeping over the pit.
+    R(60,53,136,3,'#b6c0d2');
+    var cx=128+Math.sin(t*.9)*52,drop=ph<2?0:Math.sin((ph-2)/2*Math.PI)*56;
+    R(cx-7,51,14,7,'#1b1230');
+    R(cx-1,56,2,22+drop,'#b6c0d2');
+    var cy=78+drop,open=drop>44?2:7;
+    R(cx-6,cy,12,6,'#b6c0d2');R(cx-4,cy-4,8,4,'#ffe14a');
+    poly([[-1,0],[1,0],[-open+1,13],[-open-1,13]],cx,cy+6,'#b6c0d2');
+    poly([[-1,0],[1,0],[open+1,13],[open-1,13]],cx,cy+6,'#b6c0d2');
+    if(drop>44){R(cx-5,cy+16,10,9,'#ffe14a');R(cx-3,cy+18,2,2,'#17121f');R(cx+1,cy+18,2,2,'#17121f')}
+    T('CLAW MACHINE',W/2,8,24,'#fff','center');
+    T('SAY: LEFT  RIGHT  UP  DOWN  GO',W/2,172,15,C.pink,'center');
+  }};
+})();
+
 /* ---- game data ---- */
-var DEMOS={'apex-drive':drive,'rail-rush':rail,'hill-climb':hill,'rps':rps,'scream-chicken':chick,'quiz-battle':duel};
+var DEMOS={'apex-drive':drive,'rail-rush':rail,'hill-climb':hill,'rps':rps,'scream-chicken':chick,'claw-machine':claw,'quiz-battle':duel};
 var LIST=GAMES.map(function(G){
   var m=INPUT_META[G.input];
   return {slug:G.slug,title:G.title,name:G.title.toUpperCase(),tag:m.tag,kind:m.kind,c:G.color,players:G.players,

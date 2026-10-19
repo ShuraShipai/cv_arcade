@@ -27,7 +27,7 @@ export interface HandState {
   landmarks: { x: number; y: number }[];
   /** Model frames per second, for ?debug=1. */
   fps: number;
-  /** All tracked hands; primary-hand fields above remain available to existing games. */
+  /** All tracked hands. Existing games can keep using the primary-hand fields above. */
   hands: { x: number; y: number; gesture: Gesture; confidence: number; landmarks: { x: number; y: number }[] }[];
 }
 

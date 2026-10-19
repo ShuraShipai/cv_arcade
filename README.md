@@ -23,6 +23,7 @@ npm run dev          # http://localhost:5173
 ```
 
 - `npm run build` type-checks and builds to `dist/`. `npm run preview` serves that build.
+- `npm test` runs the head-less checks for the cabinet wiring and the Apex Drive and Claw Machine rules.
 - Camera and mic only work on `localhost` or `https`.
 - Add `?debug=1` to a game URL (for example `/play/rps?debug=1`) to see landmarks and raw hand / mic numbers.
 - `/play/<slug>` routes need a server that falls back to `index.html` (Vite dev and preview already do).

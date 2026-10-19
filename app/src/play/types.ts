@@ -14,6 +14,11 @@ export interface GameContext {
   hand: HandState | null;
   /** Mic meter, or null when playing with the keyboard or the game needs no mic. */
   mic: MicMeter | null;
+  /**
+   * True when the player granted the microphone for this run. Games with `ownsMicInput` get
+   * this instead of `mic`: the page holds no stream, so the game's own recognizer can.
+   */
+  micGranted: boolean;
   settings: { sensitivity: number };
   debug: boolean;
   sound: Sound;
