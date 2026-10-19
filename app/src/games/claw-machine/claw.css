@@ -37,7 +37,8 @@
 .cm-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #6b5a88; }
 .cm-dot.is-live { background: #ff2bd6; box-shadow: 0 0 9px #ff2bd6; }
 .cm-level { width: min(100%, 190px); height: 4px; background: rgba(255,255,255,.15); }
-.cm-level i { display: block; height: 100%; width: 100%; transform: scaleX(0); transform-origin: left; background: #ff2bd6; }
+.cm-level i { display: block; height: 100%; width: 100%; transform: scaleX(0); transform-origin: left; background: #6b5a88; transition: background .12s; }
+.cm-level i.is-hot { background: #ff2bd6; box-shadow: 0 0 8px #ff2bd6; }
 .cm-voice small { color: #a897c4; font-size: clamp(8px, .84cqw, 11px); letter-spacing: .12em; }
 .cm-voice-btn {
   padding: 7px 11px; border: 1px solid rgba(255,43,214,.5); background: #35134a; color: #ffe6fb;
@@ -78,5 +79,5 @@
   .cm-readout { font-size: 7px; letter-spacing: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cm-key { transition: none; }
+  .cm-key, .cm-level i { transition: none; }
 }

@@ -12,7 +12,8 @@ import {
 } from '../app/src/games/apex-drive/physics';
 import {
   BOUNDS, CHUTE, FLOOR_Y, GRAB_RADIUS, HOLD_FRACTION, MOVE_SPEED, ROUND_SECONDS,
-  START_CREDITS, TRAVEL_Y, buildPrizes, createClawState, resolveGrab, startGrab, step,
+  START_CREDITS, TRAVEL_Y, VOICE_WORDS, buildPrizes, createClawState, resolveGrab, startGrab,
+  step, voiceThreshold,
   type ClawState, type Input, type Prize,
 } from '../app/src/games/claw-machine/logic';
 
@@ -504,6 +505,58 @@ check('a collected prize cannot be grabbed again', () => {
   s.z = target.z;
   const again = resolveGrab(s);
   assert(again?.id !== target.id, 'a collected prize must not be grabbable again');
+});
+
+console.log('\nClaw Machine · voice mapping');
+
+check('the five spoken words map onto the five actions', () => {
+  assert(VOICE_WORDS.left === 'left' && VOICE_WORDS.right === 'right', 'left/right should map');
+  assert(VOICE_WORDS.up === 'up' && VOICE_WORDS.down === 'down', 'up/down should map');
+  assert(VOICE_WORDS.go === 'grab', '"go" should be the GRAB word');
+  assert(Object.keys(VOICE_WORDS).length === 5, 'exactly five words should be acted on');
+});
+
+check('every mapped word exists in the pretrained 18w vocabulary', () => {
+  // The words shipped by @tensorflow-models/speech-commands "18w" browser_fft model.
+  const vocabulary = [
+    '_background_noise_', '_unknown_', 'down', 'eight', 'five', 'four', 'go', 'left', 'nine',
+    'no', 'one', 'right', 'seven', 'six', 'stop', 'three', 'two', 'up', 'yes', 'zero',
+  ];
+  for (const word of Object.keys(VOICE_WORDS)) {
+    assert(vocabulary.includes(word), `"${word}" is not a word the model can recognise`);
+  }
+});
+
+check('noise and digits are never mapped to an action', () => {
+  for (const word of ['_background_noise_', '_unknown_', 'yes', 'no', 'stop', 'three', 'zero']) {
+    assert(!VOICE_WORDS[word], `"${word}" should not drive the claw`);
+  }
+});
+
+check('the mic slider moves the confidence threshold the usable way round', () => {
+  const strict = voiceThreshold(0.5);
+  const mid = voiceThreshold(1);
+  const forgiving = voiceThreshold(2);
+  assert(strict > mid && mid > forgiving, `raising sensitivity should lower the bar (${strict}, ${mid}, ${forgiving})`);
+  assert(strict <= 0.92 && forgiving >= 0.4, 'the threshold should stay inside sane limits');
+  assert(mid > 0.5 && mid < 0.85, `the default should be a usable middle, got ${mid}`);
+});
+
+check('the threshold is clamped for out-of-range sensitivity', () => {
+  assert(voiceThreshold(-5) <= 0.92, 'a tiny sensitivity should not exceed the cap');
+  assert(voiceThreshold(99) >= 0.4, 'a huge sensitivity should not fall below the floor');
+});
+
+check('a voice game that owns its mic does not also ask for the shared meter', () => {
+  const claw = GAMES.find((g) => g.slug === 'claw-machine')!;
+  assert(claw.ownsMicInput === true, 'claw-machine should own its mic input');
+  assert(claw.showMicMeter === false, 'a game owning the mic must not show the shared meter');
+  assert(claw.calibrateMic === false, 'a command model needs no loudness calibration');
+});
+
+check('games that use the shared mic meter are left alone', () => {
+  const chicken = GAMES.find((g) => g.slug === 'scream-chicken')!;
+  assert(!chicken.ownsMicInput, 'scream-chicken should keep using the shared mic meter');
 });
 
 console.log('\nClaw Machine · round, timer and restart');

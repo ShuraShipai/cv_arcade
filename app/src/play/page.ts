@@ -87,6 +87,7 @@ export function mount(root: HTMLElement, game: Game): void {
   let camStream: MediaStream | null = null, micStream: MediaStream | null = null;
   let tracker: HandTracker | null = null, mic: MicMeter | null = null;
   let keyboardOnly = false, score = 0, countdownT = 0, lastShown = '';
+  let micGranted = false;
   let raf = 0, last = performance.now();
 
   const loader = GAME_LOADERS[game.slug];
@@ -180,6 +181,7 @@ export function mount(root: HTMLElement, game: Game): void {
     stopStream(camStream);
     stopStream(micStream);
     camStream = micStream = null;
+    micGranted = false;
     video.srcObject = null;
     camBox.hidden = true;
     meter.hidden = true;
@@ -202,14 +204,22 @@ export function mount(root: HTMLElement, game: Game): void {
         tracker = await startHandTracker(video, game.slug === 'apex-drive' ? 2 : 1);
         camBox.hidden = false;
       }
-      if (!keyboardOnly && game.needs === 'mic' && !mic) {
+      if (!keyboardOnly && game.needs === 'mic' && !mic && !micGranted) {
         showStarting('Waiting for the microphone...');
         micStream = await requestMic();
-        mic = startMic(micStream);
-        meter.hidden = game.showMicMeter === false;
-        if (game.calibrateMic !== false) {
-          showStarting('Stay quiet for 2 seconds while we measure the room...');
-          await mic.calibrate(2000);
+        if (game.ownsMicInput) {
+          // The game's own speech recognizer will reopen the device. Hand the mic back now:
+          // a second AudioContext on the same input reads silence and never fires a result.
+          micGranted = true;
+          stopStream(micStream);
+          micStream = null;
+        } else {
+          mic = startMic(micStream);
+          meter.hidden = game.showMicMeter === false;
+          if (game.calibrateMic !== false) {
+            showStarting('Stay quiet for 2 seconds while we measure the room...');
+            await mic.calibrate(2000);
+          }
         }
       }
       module = await modulePromise;
@@ -232,6 +242,7 @@ export function mount(root: HTMLElement, game: Game): void {
       game, view, keys, settings, debug, sound, reducedMotion,
       hand: keyboardOnly ? null : tracker?.state ?? null,
       mic: keyboardOnly ? null : mic,
+      micGranted: !keyboardOnly && micGranted,
       setScore,
       setInfo: (t) => { if (infoEl.textContent !== t) infoEl.textContent = t; },
       gameOver: (s, note) => { if (phase === 'playing') { setScore(s); showOver(Math.floor(s), note); } },

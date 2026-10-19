@@ -5,8 +5,8 @@
 import * as THREE from 'three';
 import type { GameContext, GameInstance } from '../../play/types';
 import {
-  CHUTE, FLOOR_Y, RAIL_Y, START_CREDITS,
-  buildPrizes, createClawState, startGrab, step,
+  CHUTE, FLOOR_Y, RAIL_Y, START_CREDITS, VOICE_WORDS,
+  buildPrizes, createClawState, startGrab, step, voiceThreshold,
   type Action, type ClawState, type Input, type Prize,
 } from './logic';
 import './claw.css';
@@ -291,8 +291,11 @@ export function create(ctx: GameContext): GameInstance {
   type Recognizer = Awaited<ReturnType<typeof loadVoiceModel>>;
   let recognizer: Recognizer | null = null;
   let listening = false, voiceBusy = false;
-  let lastVoiceAt = 0;
+  let lastVoiceAt = 0, lastResultAt = 0;
+  /** Best match from the most recent listening window, for the confidence bar. */
+  let lastScore = 0, lastWord = '';
   let voiceLabel = 'VOICE · STARTING';
+  const voiceAvailable = ctx.micGranted;
 
   function setVoice(label: string, live = false) {
     voiceLabel = label;
@@ -301,7 +304,7 @@ export function create(ctx: GameContext): GameInstance {
   }
 
   async function prepareVoiceModel() {
-    if (!ctx.mic) { setVoice('KEYBOARD MODE · PAD + KEYS'); voiceBtn.hidden = true; return; }
+    if (!voiceAvailable) { setVoice('KEYBOARD MODE · PAD + KEYS'); voiceBtn.hidden = true; return; }
     voiceBusy = true;
     voiceBtn.hidden = true;
     setVoice('LOADING COMMAND MODEL');
@@ -328,25 +331,37 @@ export function create(ctx: GameContext): GameInstance {
     voiceBtn.disabled = true;
     setVoice('OPENING MICROPHONE');
     try {
+      // probabilityThreshold 0 means every window reaches us, so the bar can show near
+      // misses instead of the game going quiet with no explanation.
       await recognizer.listen(async (result) => {
         if (state.ended || !recognizer) return;
         const labels = recognizer.wordLabels();
         const scores = result.scores instanceof Float32Array ? result.scores : result.scores[0];
         if (!scores?.length) return;
-        let best = 0;
-        for (let i = 1; i < scores.length; i++) if (scores[i] > scores[best]) best = i;
-        const word = labels[best];
-        const map: Record<string, Action> = { up: 'up', down: 'down', left: 'left', right: 'right', go: 'grab' };
-        const action = map[word];
-        const confidence = scores[best];
+        lastResultAt = performance.now();
+        // Rank the five words we act on, ignoring digits, "yes/no" and background noise.
+        let bestWord = '', bestScore = 0;
+        for (let i = 0; i < scores.length; i++) {
+          if (!VOICE_WORDS[labels[i]]) continue;
+          if (scores[i] > bestScore) { bestScore = scores[i]; bestWord = labels[i]; }
+        }
+        lastScore = bestScore;
+        lastWord = bestWord;
+        if (!bestWord) return;
+        const threshold = voiceThreshold(ctx.settings.sensitivity);
         const now = performance.now();
-        if (!action || confidence < 0.78 || now - lastVoiceAt < 650) return;
+        if (bestScore < threshold) {
+          setVoice(`${bestWord.toUpperCase()} ${Math.round(bestScore * 100)}% · NEED ${Math.round(threshold * 100)}%`, true);
+          return;
+        }
+        if (now - lastVoiceAt < 650) return;
         lastVoiceAt = now;
         // A spoken direction is one nudge, held a little longer than a key tap.
-        trigger(action, 0.42);
-        setVoice(`HEARD ${word.toUpperCase()} · ${Math.round(confidence * 100)}%`, true);
-      }, { probabilityThreshold: 0.78, overlapFactor: 0.25, suppressionTimeMillis: 550 });
+        trigger(VOICE_WORDS[bestWord], 0.42);
+        setVoice(`HEARD ${bestWord.toUpperCase()} · ${Math.round(bestScore * 100)}%`, true);
+      }, { probabilityThreshold: 0, overlapFactor: 0.5, suppressionTimeMillis: 400 });
       listening = true;
+      lastResultAt = performance.now();
       voiceBtn.hidden = true;
       setVoice('MIC LIVE · SAY LEFT RIGHT UP DOWN GO', true);
     } catch (error) {
@@ -362,7 +377,7 @@ export function create(ctx: GameContext): GameInstance {
   }
 
   voiceBtn.addEventListener('click', () => { void startVoiceControls(); });
-  if (ctx.mic) void prepareVoiceModel();
+  if (voiceAvailable) void prepareVoiceModel();
   else setVoice('KEYBOARD MODE · PAD + KEYS');
 
   /* ---------------- resize ---------------- */
@@ -395,7 +410,18 @@ export function create(ctx: GameContext): GameInstance {
   function update(dt: number) {
     if (state.ended) { renderer.render(scene, camera); return; }
     messageT = Math.max(0, messageT - dt);
-    levelEl.style.transform = `scaleX(${Math.min(1, (ctx.mic?.state.level ?? 0) * 11)})`;
+    // The bar tracks how well the last window matched one of the five words. We no longer
+    // hold a mic stream of our own, so there is no raw level to show.
+    levelEl.style.transform = `scaleX(${Math.min(1, lastScore)})`;
+    levelEl.classList.toggle('is-hot', lastScore >= voiceThreshold(ctx.settings.sensitivity));
+    // A listening recognizer that stops delivering windows means the audio path died.
+    if (listening && performance.now() - lastResultAt > 6000) {
+      listening = false;
+      setVoice('NO AUDIO FROM THE MIC · USE KEYS OR RETRY');
+      voiceBtn.textContent = 'RETRY VOICE CONTROLS';
+      voiceBtn.disabled = false;
+      voiceBtn.hidden = false;
+    }
     state.reachScale = ctx.settings.sensitivity;
 
     if (ctx.keys.pressed('Space') || ctx.keys.pressed('Enter')) trigger('grab');

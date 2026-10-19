@@ -53,6 +53,20 @@ export const PRIZE_KINDS = [
   { name: 'PURPLE CAT', color: '#b88cff', accent: '#ecdfff', value: 200, radius: 0.5 },
 ];
 
+/** The five words the pretrained speech-commands model maps onto the five actions. */
+export const VOICE_WORDS: Record<string, Action> = {
+  up: 'up', down: 'down', left: 'left', right: 'right', go: 'grab',
+};
+
+/**
+ * How confident a spoken match must be before it moves the claw. The Ready-screen mic
+ * sensitivity slider (0.5x..2x) drives it, so a quiet mic or a noisy room can be dialled in
+ * without a code change: 0.5x is strict, 2x is forgiving.
+ */
+export function voiceThreshold(sensitivity: number): number {
+  return Math.max(0.4, Math.min(0.92, 0.88 - (sensitivity - 0.5) * 0.24));
+}
+
 export interface ClawState {
   phase: Phase;
   phaseT: number;

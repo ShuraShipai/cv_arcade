@@ -20,6 +20,12 @@ export interface Game {
   /** Voice-command games can skip level calibration and the loudness meter. */
   calibrateMic?: boolean;
   showMicMeter?: boolean;
+  /**
+   * The game opens its own microphone (a speech model does its own capture). The page checks
+   * permission, then releases the device so the game's recognizer is the only consumer:
+   * two AudioContexts on one mic starves the second one and it reads silence.
+   */
+  ownsMicInput?: boolean;
   troubleshooting: string[];
 }
 
@@ -203,13 +209,16 @@ export const GAMES: Game[] = [
       'Line the claw up over the middle of a prize. A grab off to one side slips.',
       'Watch the CLAW readout: it shows LOWERING, CLOSING, LIFTING and CARRYING TO CHUTE.',
       'Say one word at a time and pause. The command model listens in short windows.',
+      'The bar under the mic light shows how well your last word matched. If it moves but never turns pink, raise Mic sensitivity on the Ready screen.',
     ],
     needs: 'mic',
     needsText: 'Needs your microphone and internet to load a small pretrained command model. It reacts to left, right, up, down and go; recognition runs on this device.',
     calibrateMic: false,
     showMicMeter: false,
+    ownsMicInput: true,
     troubleshooting: [
-      'No voice input: tap Start Voice Controls after the model loads. The mic bar should move when you speak.',
+      'No voice input: tap Start Voice Controls after the model loads. The HEARD bar should move when you speak.',
+      'Heard but ignored: the match percentage is below the bar. Raise Mic sensitivity on the Ready screen, say one word at a time, and pause between words.',
       'Command model failed to load: check internet access and press Retry command model. The keys and the on-screen pad still work.',
       'Microphone blocked: click the microphone icon in the address bar, allow it, then press Start again.',
       'No microphone found: plug one in or choose Play with keyboard instead.',

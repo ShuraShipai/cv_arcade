@@ -35,10 +35,12 @@ Each prize scores its own value, from 150 for a plush up to 260 for the star.
 - Line the claw up over the middle of a prize. A grab off to one side slips.
 - Watch the CLAW readout: it shows LOWERING, CLOSING, LIFTING and CARRYING TO CHUTE.
 - Say one word at a time and pause. The command model listens in short windows.
+- The bar under the mic light shows how well your last word matched. If it moves but never turns pink, raise Mic sensitivity on the Ready screen.
 
 ## Troubleshooting
 
-- No voice input: tap Start Voice Controls after the model loads. The mic bar should move when you speak.
+- No voice input: tap Start Voice Controls after the model loads. The HEARD bar should move when you speak.
+- Heard but ignored: the match percentage is below the bar. Raise Mic sensitivity on the Ready screen, say one word at a time, and pause between words.
 - Command model failed to load: check internet access and press Retry command model. The keys and the on-screen pad still work.
 - Microphone blocked: click the microphone icon in the address bar, allow it, then press Start again.
 - No microphone found: plug one in or choose Play with keyboard instead.
